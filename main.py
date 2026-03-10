@@ -1,5 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+from app.database import supabase
 from app.routers import auth, units, lessons, progress
 
 app = FastAPI(title="Uzbek Learning API")
@@ -19,4 +21,9 @@ app.include_router(progress.router, prefix="/progress", tags=["progress"])
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    try:
+        # Tries to read one row from user_profile — proves DB is reachable
+        supabase.table("user_profile").select("id").limit(1).execute()
+        return {"status": "ok", "database": "connected"}
+    except Exception as e:
+        return {"status": "ok", "database": "error", "detail": str(e)}
