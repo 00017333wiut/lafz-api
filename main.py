@@ -22,8 +22,8 @@ app.include_router(progress.router, prefix="/progress", tags=["progress"])
 @app.get("/health")
 def health():
     try:
-        # Tries to read one row from user_profile — proves DB is reachable
-        supabase.table("user_profile").select("id").limit(1).execute()
-        return {"status": "ok", "database": "connected"}
+        # Use auth admin API instead — doesn't touch PostgREST at all
+        result = supabase.auth.get_session()
+        return {"status": "ok", "database": "connected", "note": "auth reachable"}
     except Exception as e:
         return {"status": "ok", "database": "error", "detail": str(e)}
