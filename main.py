@@ -2,7 +2,7 @@ from fastapi import FastAPI, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.auth import get_current_user
+from app.auth.dependencies import get_current_user
 from app.routers import auth, units, lessons, progress
 from app.database import supabase
 
