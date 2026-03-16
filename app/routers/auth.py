@@ -1,6 +1,8 @@
 from fastapi import APIRouter, HTTPException
 from app.models.user import RegisterRequest, LoginRequest, AuthResponse
 from app.database import supabase
+import logging
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -8,7 +10,6 @@ router = APIRouter()
 @router.post("/register", response_model=AuthResponse)
 def register(body: RegisterRequest):
     try:
-        # Register with Supabase Auth
         result = supabase.auth.sign_up({
             "email": body.email,
             "password": body.password,
@@ -20,11 +21,18 @@ def register(body: RegisterRequest):
         if result.user is None:
             raise HTTPException(status_code=400, detail="Registration failed")
 
-        # update full_name in user_profile
-        # (trigger already created the row, we just update the name)
-        supabase.table("user_profile").update(
-            {"full_name": body.full_name}
-        ).eq("id", str(result.user.id)).execute()
+        # Try to update full_name but don't fail if DB is unavailable
+        try:
+            from app.database import engine
+            from sqlalchemy import text
+            with engine.connect() as conn:
+                conn.execute(
+                    text("UPDATE user_profile SET full_name = :name WHERE id = :uid"),
+                    {"name": body.full_name, "uid": str(result.user.id)}
+                )
+                conn.commit()
+        except Exception as db_err:
+            logger.warning(f"Could not update full_name after register: {db_err}")
 
         return AuthResponse(
             access_token=result.session.access_token,
