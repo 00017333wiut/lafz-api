@@ -42,7 +42,5 @@ class ExerciseResponse(BaseModel):
     exercise_type: str
     question_text: str
     audio_url: Optional[str] = None
-    options: Optional[dict] = None
+    options: Optional[list] = None
     points: int
-    # NOTE: correct_answer is intentionally excluded
-    # — never send the answer to the client
