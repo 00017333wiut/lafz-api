@@ -137,13 +137,45 @@ def attempt_exercise(
         feedback="Correct!" if is_correct else "Try again!"
     )
 
+@router.get("/achievements")
+def get_achievements(
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    user_id = current_user["user_id"]
+
+    all_milestones = db.execute(
+        text("SELECT id, title, description, milestone_type, exp_bonus FROM milestone")
+    ).fetchall()
+
+    achieved = db.execute(
+        text("SELECT milestone_id FROM user_milestone WHERE user_id = :uid"),
+        {"uid": user_id}
+    ).fetchall()
+
+    achieved_ids = [row[0] for row in achieved]
+
+    return {
+        "all_milestones": [
+            {
+                "id": m[0],
+                "title": m[1],
+                "description": m[2],
+                "milestone_type": m[3],
+                "exp_bonus": m[4]
+            }
+            for m in all_milestones
+        ],
+        "achieved_ids": achieved_ids
+    }
 
 @router.post("/lessons/{lesson_id}/complete",
              response_model=LessonCompleteResponse)
 def complete_lesson(
     lesson_id: int,
     current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    is_perfect: bool = False  # query param: /lessons/1/complete?is_perfect=true
 ):
     user_id = current_user["user_id"]
 
@@ -226,14 +258,46 @@ def complete_lesson(
 
     # Check milestones
     milestones_achieved = []
-    milestones = db.execute(
-        text("SELECT * FROM milestone")
+    milestones = db.execute(text("SELECT * FROM milestone")).fetchall()
+
+    # Get stats needed for milestone checks
+    completed_lessons_count = db.execute(
+        text("""
+            SELECT COUNT(*) FROM user_progress
+            WHERE user_id = :uid AND status = 'COMPLETED'
+        """),
+        {"uid": user_id}
+    ).scalar()
+
+    units = db.execute(
+        text("SELECT id FROM unit WHERE is_published = true")
     ).fetchall()
+
+    completed_units_count = 0
+    for unit in units:
+        unit_lessons_total = db.execute(
+            text("SELECT COUNT(*) FROM lesson WHERE unit_id = :uid AND is_published = true"),
+            {"uid": unit[0]}
+        ).scalar()
+        unit_lessons_done = db.execute(
+            text("""
+                SELECT COUNT(*) FROM user_progress up
+                JOIN lesson l ON l.id = up.lesson_id
+                WHERE l.unit_id = :unit_id
+                AND up.user_id = :user_id
+                AND up.status = 'COMPLETED'
+            """),
+            {"unit_id": unit[0], "user_id": user_id}
+        ).scalar()
+        if unit_lessons_total > 0 and unit_lessons_total == unit_lessons_done:
+            completed_units_count += 1
 
     for milestone in milestones:
         milestone_id = milestone[0]
-        criteria = milestone[4]
+        milestone_title = milestone[1]
         milestone_type = milestone[3]
+        criteria = milestone[4]
+        exp_bonus = milestone[6]
 
         # Skip if already achieved
         already = db.execute(
@@ -249,40 +313,19 @@ def complete_lesson(
         achieved = False
 
         if milestone_type == "TOTAL_EXP":
-            threshold = criteria.get("exp_threshold", 0)
-            achieved = total_exp >= threshold
+            # Handle both exp threshold and perfect lesson
+            if "exp_threshold" in criteria:
+                achieved = total_exp >= criteria["exp_threshold"]
+            elif "perfect_lesson" in criteria:
+                achieved = is_perfect  # passed in from endpoint
 
         elif milestone_type == "UNIT_COMPLETION":
-            required = criteria.get("units_completed", 0)
-            # Count completed units
-            units = db.execute(
-                text("SELECT id FROM unit WHERE is_published = true")
-            ).fetchall()
-            completed_units = 0
-            for unit in units:
-                unit_lessons = db.execute(
-                    text("""
-                        SELECT COUNT(*) FROM lesson
-                        WHERE unit_id = :uid AND is_published = true
-                    """),
-                    {"uid": unit[0]}
-                ).scalar()
-                done = db.execute(
-                    text("""
-                        SELECT COUNT(*) FROM user_progress up
-                        JOIN lesson l ON l.id = up.lesson_id
-                        WHERE l.unit_id = :unit_id
-                        AND up.user_id = :user_id
-                        AND up.status = 'COMPLETED'
-                    """),
-                    {"unit_id": unit[0], "user_id": user_id}
-                ).scalar()
-                if unit_lessons > 0 and unit_lessons == done:
-                    completed_units += 1
-            achieved = completed_units >= required
+            if "lessons_completed" in criteria:
+                achieved = completed_lessons_count >= criteria["lessons_completed"]
+            elif "units_completed" in criteria:
+                achieved = completed_units_count >= criteria["units_completed"]
 
         if achieved:
-            bonus = milestone[6]
             db.execute(
                 text("""
                     INSERT INTO user_milestone (user_id, milestone_id, achieved_at)
@@ -290,17 +333,18 @@ def complete_lesson(
                 """),
                 {"uid": user_id, "mid": milestone_id}
             )
-            if bonus > 0:
+            if exp_bonus > 0:
                 db.execute(
                     text("""
                         UPDATE user_profile
                         SET total_exp = total_exp + :bonus
                         WHERE id = :uid
                     """),
-                    {"bonus": bonus, "uid": user_id}
+                    {"bonus": exp_bonus, "uid": user_id}
                 )
-            milestones_achieved.append(milestone[1])
-            logger.info(f"User {user_id} achieved milestone: {milestone[1]}")
+                total_exp += exp_bonus
+            milestones_achieved.append(milestone_title)
+            logger.info(f"User {user_id} achieved milestone: {milestone_title}")
 
     db.commit()
 
