@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
+import markdown
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from app.auth.dependencies import get_current_user
@@ -70,16 +71,20 @@ def get_lesson_detail(
     if not result:
         raise HTTPException(status_code=404, detail="Lesson not found")
 
+    raw_md = result[6]  # theory_content column
+    html_content = markdown.markdown(raw_md, extensions=["extra", "tables"]) if raw_md else None
+
     return LessonDetailResponse(
         id=result[0],
         unit_id=result[1],
         lesson_type=result[3],
         title=result[4],
         subtitle=result[5],
-        theory_content=result[6],
+        theory_content=html_content,   # send HTML instead of Markdown
         estimated_minutes=result[7],
         exp_reward=result[8]
     )
+
 
 
 @router.get("/{lesson_id}/exercises", response_model=List[ExerciseResponse])
