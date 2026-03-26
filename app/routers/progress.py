@@ -134,7 +134,8 @@ def attempt_exercise(
         is_correct=is_correct,
         points_earned=points_earned,
         correct_answer=correct_answer,
-        feedback="Correct!" if is_correct else "Try again!"
+        feedback="Correct!" if is_correct else "Try again!",
+        answer_explanation=exercise[8]  # answer_explanation column index
     )
 
 @router.get("/achievements")

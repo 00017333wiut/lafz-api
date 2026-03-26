@@ -1,3 +1,4 @@
+import json_type
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
@@ -11,8 +12,9 @@ class ExerciseAttemptRequest(BaseModel):
 class ExerciseAttemptResponse(BaseModel):
     is_correct: bool
     points_earned: int
-    correct_answer: dict | str | list  # revealed after attempt
+    correct_answer: json_type | str | list
     feedback: Optional[str] = None
+    answer_explanation: Optional[dict] = None
 
 
 class LessonCompleteResponse(BaseModel):
