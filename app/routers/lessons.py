@@ -6,6 +6,7 @@ from app.auth.dependencies import get_current_user
 from app.models.content import LessonResponse, LessonDetailResponse, ExerciseResponse
 from app.database import get_db
 from typing import List
+from app.services.tts_service import generate_and_store_audio
 
 router = APIRouter()
 
@@ -85,8 +86,6 @@ def get_lesson_detail(
         exp_reward=result[8]
     )
 
-
-
 @router.get("/{lesson_id}/exercises", response_model=List[ExerciseResponse])
 def get_exercises(
     lesson_id: int,
@@ -118,3 +117,87 @@ def get_exercises(
         )
         for ex in results
     ]
+
+@router.post("/{lesson_id}/exercises/{exercise_id}/generate-audio")
+def generate_exercise_audio(
+    lesson_id: int,
+    exercise_id: int,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Generate TTS audio for an exercise question if not already stored.
+    Called once per exercise — subsequent calls return the cached URL.
+    """
+    exercise = db.execute(
+        text("SELECT * FROM exercise WHERE id = :eid AND lesson_id = :lid"),
+        {"eid": exercise_id, "lid": lesson_id}
+    ).fetchone()
+
+    if not exercise:
+        raise HTTPException(status_code=404, detail="Exercise not found")
+
+    # Return existing URL if already generated
+    existing_url = exercise[5]  # audio_url column
+    if existing_url:
+        return {"audio_url": existing_url}
+
+    # Generate new audio
+    question_text = exercise[4]  # question_text column
+    filename = f"exercise_{exercise_id}.mp3"
+
+    audio_url = generate_and_store_audio(question_text, filename)
+
+    if not audio_url:
+        raise HTTPException(status_code=500, detail="Audio generation failed")
+
+    # Store URL in DB so we never generate again
+    db.execute(
+        text("UPDATE exercise SET audio_url = :url WHERE id = :eid"),
+        {"url": audio_url, "eid": exercise_id}
+    )
+    db.commit()
+
+    return {"audio_url": audio_url}
+
+@router.post("/{lesson_id}/generate-all-audio")
+def generate_all_lesson_audio(
+    lesson_id: int,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Pre-generate audio for all exercises in a lesson that don't have audio yet.
+    Call this once after adding new lesson content.
+    """
+    exercises = db.execute(
+        text("""
+            SELECT id, question_text, audio_url 
+            FROM exercise 
+            WHERE lesson_id = :lid
+        """),
+        {"lid": lesson_id}
+    ).fetchall()
+
+    results = []
+    for ex in exercises:
+        ex_id, question, existing_url = ex[0], ex[1], ex[2]
+
+        if existing_url:
+            results.append({"id": ex_id, "status": "skipped", "url": existing_url})
+            continue
+
+        filename = f"exercise_{ex_id}.mp3"
+        url = generate_and_store_audio(question, filename)
+
+        if url:
+            db.execute(
+                text("UPDATE exercise SET audio_url = :url WHERE id = :eid"),
+                {"url": url, "eid": ex_id}
+            )
+            results.append({"id": ex_id, "status": "generated", "url": url})
+        else:
+            results.append({"id": ex_id, "status": "failed", "url": None})
+
+    db.commit()
+    return {"results": results}
