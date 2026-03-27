@@ -1,7 +1,9 @@
 import logging
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+
+from app.auth.dependencies import get_current_user
 from app.routers import auth, units, lessons, progress
 from app.database import supabase
 
@@ -50,3 +52,36 @@ def health():
     except Exception as e:
         logger.error(f"Health check DB error: {e}")
         return {"status": "ok", "database": "error", "detail": str(e)}
+
+@app.get("/debug-tts")
+def debug_tts(current_user: dict = Depends(get_current_user)):
+    import httpx, time
+    from app.config import UZBEKVOICE_API_KEY
+
+    response = httpx.post(
+        "https://uzbekvoice.ai/api/v1/tts",
+        headers={
+            "Authorization": UZBEKVOICE_API_KEY,
+            "Content-Type": "application/json"
+        },
+        json={"text": "Salom", "model": "dilfuza-neutral", "blocking": False},
+        timeout=30
+    )
+
+    job_data = response.json()
+    job_id = job_data.get("id")  # e.g. "tts/47b714de.../4e48af74..."
+
+    time.sleep(5)
+
+    # Use job_id directly as the path — don't prepend /tts/
+    poll = httpx.get(
+        f"https://uzbekvoice.ai/api/v1/{job_id}",
+        headers={"Authorization": UZBEKVOICE_API_KEY},
+        timeout=15
+    )
+
+    return {
+        "job_id": job_id,
+        "poll_status": poll.status_code,
+        "poll_response": poll.json() if poll.status_code == 200 else poll.text
+    }

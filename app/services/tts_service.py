@@ -43,7 +43,7 @@ def generate_and_store_audio(text: str, filename: str) -> str | None:
             time.sleep(2)
 
             poll = httpx.get(
-                f"{UZBEKVOICE_BASE}/tts/{job_id}",
+                f"https://uzbekvoice.ai/api/v1/{job_id}",
                 headers={"Authorization": UZBEKVOICE_API_KEY},
                 timeout=15
             )
