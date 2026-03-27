@@ -66,7 +66,7 @@ def debug_tts(current_user: dict = Depends(get_current_user)):
         },
         json={
             "text": "Salom",
-            "model": "dilfuza-neutral",
+            "model": "lola",
             "blocking": "true",
             "webhook_notification_url": "https://example.com"
         },
@@ -77,6 +77,6 @@ def debug_tts(current_user: dict = Depends(get_current_user)):
         "status_code": response.status_code,
         "content_type": response.headers.get("content-type"),
         "content_length": len(response.content),
-        "response_json": response.json() if "application/json" in response.headers.get("content-type", "") else None,
+        "response_text": response.text,  # show raw text
         "is_binary": "audio" in response.headers.get("content-type", "")
     }
