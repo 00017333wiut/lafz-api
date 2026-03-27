@@ -113,7 +113,8 @@ def get_exercises(
             question_text=ex[4],
             audio_url=ex[5],
             options=ex[6],
-            points=ex[9]
+            points=ex[9],
+            keyword=ex[10]
         )
         for ex in results
     ]
@@ -143,10 +144,10 @@ def generate_exercise_audio(
         return {"audio_url": existing_url}
 
     # Generate new audio
-    question_text = exercise[4]  # question_text column
+    keyword = exercise[10]  # question_text column
     filename = f"exercise_{exercise_id}.mp3"
 
-    audio_url = generate_and_store_audio(question_text, filename)
+    audio_url = generate_and_store_audio(keyword, filename)
 
     if not audio_url:
         raise HTTPException(status_code=500, detail="Audio generation failed")
@@ -169,7 +170,7 @@ def generate_all_lesson_audio(
 ):
     exercises = db.execute(
         text("""
-            SELECT id, question_text, audio_url 
+            SELECT id, keyword, audio_url 
             FROM exercise 
             WHERE lesson_id = :lid
         """),
@@ -200,10 +201,10 @@ def process_audio_batch(exercises: list):
     db = SessionLocal()
 
     try:
-        for ex_id, question_text in exercises:
-            logger.info(f"Generating audio for exercise {ex_id}: {question_text}")
+        for ex_id, keyword in exercises:
+            logger.info(f"Generating audio for exercise {ex_id}: {keyword}")
             filename = f"exercise_{ex_id}.mp3"
-            url = generate_and_store_audio(question_text, filename)
+            url = generate_and_store_audio(keyword, filename)
 
             if url:
                 db.execute(

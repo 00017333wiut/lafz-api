@@ -44,3 +44,4 @@ class ExerciseResponse(BaseModel):
     audio_url: Optional[str] = None
     options: Optional[list] = None
     points: int
+    keyword: str
