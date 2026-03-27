@@ -37,13 +37,15 @@ def generate_and_store_audio(text: str, filename: str) -> str | None:
 
         logger.info(f"TTS job submitted: {job_id}")
 
+        job_parts = job_id.replace("tts/", "")
+
         # Step 2 — poll until complete (max 30 seconds)
         audio_url = None
         for attempt in range(15):
             time.sleep(2)
 
             poll = httpx.get(
-                f"https://uzbekvoice.ai/api/v1/{job_id}",
+                f"https://uzbekvoice.ai/api/v1/tts/{job_parts}",
                 headers={"Authorization": UZBEKVOICE_API_KEY},
                 timeout=15
             )

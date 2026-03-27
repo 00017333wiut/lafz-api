@@ -70,12 +70,13 @@ def debug_tts(current_user: dict = Depends(get_current_user)):
 
     job_data = response.json()
     job_id = job_data.get("id")  # e.g. "tts/47b714de.../4e48af74..."
+    job_parts = job_id.replace("tts/", "")
 
     time.sleep(5)
 
     # Use job_id directly as the path — don't prepend /tts/
     poll = httpx.get(
-        f"https://uzbekvoice.ai/api/v1/{job_id}",
+        f"https://uzbekvoice.ai/api/v1/tts/{job_parts}",
         headers={"Authorization": UZBEKVOICE_API_KEY},
         timeout=15
     )
