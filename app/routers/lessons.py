@@ -144,7 +144,7 @@ def generate_exercise_audio(
         return {"audio_url": existing_url}
 
     # Generate new audio
-    keyword = exercise[10]  # question_text column
+    keyword = exercise[12]  # question_text column
     filename = f"exercise_{exercise_id}.wav"
 
     audio_url = generate_and_store_audio(keyword, filename)
