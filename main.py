@@ -55,7 +55,7 @@ def health():
 
 @app.get("/debug-tts")
 def debug_tts(current_user: dict = Depends(get_current_user)):
-    import httpx, time
+    import httpx
     from app.config import UZBEKVOICE_API_KEY
 
     response = httpx.post(
@@ -64,25 +64,19 @@ def debug_tts(current_user: dict = Depends(get_current_user)):
             "Authorization": UZBEKVOICE_API_KEY,
             "Content-Type": "application/json"
         },
-        json={"text": "Salom", "model": "dilfuza-neutral", "blocking": False},
-        timeout=30
-    )
-
-    job_data = response.json()
-    job_id = job_data.get("id")  # e.g. "tts/47b714de.../4e48af74..."
-    job_parts = job_id.replace("tts/", "")
-
-    time.sleep(5)
-
-    # Use job_id directly as the path — don't prepend /tts/
-    poll = httpx.get(
-        f"https://uzbekvoice.ai/api/v1/tts/{job_parts}",
-        headers={"Authorization": UZBEKVOICE_API_KEY},
-        timeout=15
+        json={
+            "text": "Salom",
+            "model": "dilfuza-neutral",
+            "blocking": "true",
+            "webhook_notification_url": "https://example.com"
+        },
+        timeout=60  # longer timeout for blocking
     )
 
     return {
-        "job_id": job_id,
-        "poll_status": poll.status_code,
-        "poll_response": poll.json() if poll.status_code == 200 else poll.text
+        "status_code": response.status_code,
+        "content_type": response.headers.get("content-type"),
+        "content_length": len(response.content),
+        "response_json": response.json() if "application/json" in response.headers.get("content-type", "") else None,
+        "is_binary": "audio" in response.headers.get("content-type", "")
     }
