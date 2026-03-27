@@ -246,3 +246,41 @@ def test_tts(current_user: dict = Depends(get_current_user)):
         "response_text": response.text[:500],  # first 500 chars
         "headers": dict(response.headers)
     }
+
+@router.get("/test-tts-poll")
+def test_tts_poll(current_user: dict = Depends(get_current_user)):
+    import httpx
+    import time
+    from app.config import UZBEKVOICE_API_KEY
+
+    # Submit job
+    response = httpx.post(
+        "https://uzbekvoice.ai/api/v1/tts",
+        headers={
+            "Authorization": UZBEKVOICE_API_KEY,
+            "Content-Type": "application/json"
+        },
+        json={
+            "text": "Salom",
+            "model": "dilfuza-neutral",
+            "blocking": False
+        },
+        timeout=30
+    )
+
+    job_id = response.json().get("id")
+
+    # Wait and poll once
+    time.sleep(5)
+
+    poll = httpx.get(
+        f"https://uzbekvoice.ai/api/v1/tts/{job_id}",
+        headers={"Authorization": UZBEKVOICE_API_KEY},
+        timeout=15
+    )
+
+    return {
+        "job_id": job_id,
+        "poll_status": poll.status_code,
+        "poll_response": poll.json()
+    }
