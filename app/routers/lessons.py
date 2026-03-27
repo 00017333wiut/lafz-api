@@ -81,7 +81,7 @@ def get_lesson_detail(
         lesson_type=result[3],
         title=result[4],
         subtitle=result[5],
-        theory_content=html_content,   # send HTML instead of Markdown
+        theory_content=html_content,
         estimated_minutes=result[7],
         exp_reward=result[8]
     )
