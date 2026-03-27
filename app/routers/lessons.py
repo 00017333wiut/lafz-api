@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 import markdown
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -163,13 +163,10 @@ def generate_exercise_audio(
 @router.post("/{lesson_id}/generate-all-audio")
 def generate_all_lesson_audio(
     lesson_id: int,
+    background_tasks: BackgroundTasks,
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """
-    Pre-generate audio for all exercises in a lesson that don't have audio yet.
-    Call this once after adding new lesson content.
-    """
     exercises = db.execute(
         text("""
             SELECT id, question_text, audio_url 
@@ -179,28 +176,48 @@ def generate_all_lesson_audio(
         {"lid": lesson_id}
     ).fetchall()
 
-    results = []
-    for ex in exercises:
-        ex_id, question, existing_url = ex[0], ex[1], ex[2]
+    pending = [(ex[0], ex[1]) for ex in exercises if not ex[2]]
 
-        if existing_url:
-            results.append({"id": ex_id, "status": "skipped", "url": existing_url})
-            continue
+    if not pending:
+        return {"message": "All exercises already have audio", "count": 0}
 
-        filename = f"exercise_{ex_id}.mp3"
-        url = generate_and_store_audio(question, filename)
+    # Return immediately — process audio in background
+    background_tasks.add_task(process_audio_batch, pending)
 
-        if url:
-            db.execute(
-                text("UPDATE exercise SET audio_url = :url WHERE id = :eid"),
-                {"url": url, "eid": ex_id}
-            )
-            results.append({"id": ex_id, "status": "generated", "url": url})
-        else:
-            results.append({"id": ex_id, "status": "failed", "url": None})
+    return {
+        "message": f"Generating audio for {len(pending)} exercises in background",
+        "count": len(pending)
+    }
 
-    db.commit()
-    return {"results": results}
+
+def process_audio_batch(exercises: list):
+    """Runs in background — generates and stores audio for each exercise."""
+    from app.database import SessionLocal
+    from app.services.tts_service import generate_and_store_audio
+    import logging
+
+    logger = logging.getLogger(__name__)
+    db = SessionLocal()
+
+    try:
+        for ex_id, question_text in exercises:
+            logger.info(f"Generating audio for exercise {ex_id}: {question_text}")
+            filename = f"exercise_{ex_id}.mp3"
+            url = generate_and_store_audio(question_text, filename)
+
+            if url:
+                db.execute(
+                    text("UPDATE exercise SET audio_url = :url WHERE id = :eid"),
+                    {"url": url, "eid": ex_id}
+                )
+                db.commit()
+                logger.info(f"Exercise {ex_id} audio saved: {url}")
+            else:
+                logger.error(f"Exercise {ex_id} audio generation failed")
+    except Exception as e:
+        logger.error(f"Batch audio generation error: {e}")
+    finally:
+        db.close()
 
 
 @router.post("/test-tts")
