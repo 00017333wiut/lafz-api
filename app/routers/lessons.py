@@ -95,16 +95,13 @@ def get_exercises(
     results = db.execute(
         text("""
             SELECT id, lesson_id, order_index, exercise_type,
-                   question_text, audio_url, options, points
+                   question_text, audio_url, options, points, keyword
             FROM exercise
             WHERE lesson_id = :lid
             ORDER BY order_index
         """),
         {"lid": lesson_id}
     ).fetchall()
-
-    if not results:
-        return []
 
     return [
         ExerciseResponse(
@@ -115,7 +112,8 @@ def get_exercises(
             question_text=ex[4],
             audio_url=ex[5],
             options=ex[6],
-            points=ex[7]
+            points=ex[7],
+            keyword=ex[8]
         )
         for ex in results
     ]
