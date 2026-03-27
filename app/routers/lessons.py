@@ -201,3 +201,31 @@ def generate_all_lesson_audio(
 
     db.commit()
     return {"results": results}
+
+
+@router.post("/test-tts")
+def test_tts(current_user: dict = Depends(get_current_user)):
+    import httpx
+    from app.config import UZBEKVOICE_API_KEY
+
+    response = httpx.post(
+        "https://uzbekvoice.ai/api/v1/tts",
+        headers={
+            "Authorization": UZBEKVOICE_API_KEY,
+            "Content-Type": "application/json"
+        },
+        json={
+            "text": "Salom",
+            "model": "dilfuza-neutral",
+            "blocking": True
+        },
+        timeout=30
+    )
+
+    return {
+        "status_code": response.status_code,
+        "content_type": response.headers.get("content-type"),
+        "content_length": len(response.content),
+        "response_text": response.text[:500],  # first 500 chars
+        "headers": dict(response.headers)
+    }
