@@ -126,33 +126,33 @@ def generate_exercise_audio(
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """
-    Generate TTS audio for an exercise question if not already stored.
-    Called once per exercise — subsequent calls return the cached URL.
-    """
     exercise = db.execute(
-        text("SELECT * FROM exercise WHERE id = :eid AND lesson_id = :lid"),
+        text("""
+            SELECT id, audio_url, keyword 
+            FROM exercise 
+            WHERE id = :eid AND lesson_id = :lid
+        """),
         {"eid": exercise_id, "lid": lesson_id}
     ).fetchone()
 
     if not exercise:
         raise HTTPException(status_code=404, detail="Exercise not found")
 
-    # Return existing URL if already generated
-    existing_url = exercise[5]  # audio_url column
+    # Now use named indices — 0=id, 1=audio_url, 2=keyword
+    existing_url = exercise[1]
     if existing_url:
         return {"audio_url": existing_url}
 
-    # Generate new audio
-    keyword = exercise[12]  # question_text column
-    filename = f"exercise_{exercise_id}.wav"
+    keyword = exercise[2]
+    if not keyword:
+        raise HTTPException(status_code=400, detail="Exercise has no keyword set")
 
+    filename = f"exercise_{exercise_id}.wav"
     audio_url = generate_and_store_audio(keyword, filename)
 
     if not audio_url:
         raise HTTPException(status_code=500, detail="Audio generation failed")
 
-    # Store URL in DB so we never generate again
     db.execute(
         text("UPDATE exercise SET audio_url = :url WHERE id = :eid"),
         {"url": audio_url, "eid": exercise_id}
