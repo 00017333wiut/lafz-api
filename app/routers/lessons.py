@@ -114,7 +114,7 @@ def get_exercises(
             audio_url=ex[5],
             options=ex[6],
             points=ex[9],
-            keyword=ex[10]
+            keyword=ex[12]
         )
         for ex in results
     ]
@@ -145,7 +145,7 @@ def generate_exercise_audio(
 
     # Generate new audio
     keyword = exercise[10]  # question_text column
-    filename = f"exercise_{exercise_id}.mp3"
+    filename = f"exercise_{exercise_id}.wav"
 
     audio_url = generate_and_store_audio(keyword, filename)
 
@@ -203,7 +203,7 @@ def process_audio_batch(exercises: list):
     try:
         for ex_id, keyword in exercises:
             logger.info(f"Generating audio for exercise {ex_id}: {keyword}")
-            filename = f"exercise_{ex_id}.mp3"
+            filename = f"exercise_{ex_id}.wav"
             url = generate_and_store_audio(keyword, filename)
 
             if url:
