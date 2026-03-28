@@ -100,6 +100,26 @@ def attempt_exercise(
     correct_answer = exercise[7]  # correct_answer column
     points = exercise[9]
 
+    exercise_type = db.execute(
+        text("SELECT exercise_type FROM exercise WHERE id = :eid"),
+        {"eid": exercise_id}
+    ).scalar()
+
+    # Speaking exercises — any input counts as correct
+    if exercise_type == "SPEAKING":
+        is_correct = True
+        points_earned = points
+    else:
+        # existing comparison logic
+        user_ans = json.dumps(body.user_answer, sort_keys=True) \
+            if isinstance(body.user_answer, dict) \
+            else str(body.user_answer)
+        correct_ans = json.dumps(correct_answer, sort_keys=True) \
+            if isinstance(correct_answer, dict) \
+            else str(correct_answer)
+        is_correct = user_ans.strip().lower() == correct_ans.strip().lower()
+        points_earned = points if is_correct else 0
+
     # Normalise both to strings for comparison
     user_ans = json.dumps(body.user_answer, sort_keys=True) \
         if isinstance(body.user_answer, dict) \
