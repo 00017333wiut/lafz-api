@@ -113,7 +113,7 @@ def get_exercises(
             audio_url=ex[5],
             options=ex[6],
             points=ex[7],
-            # correct_answer deliberately omitted
+            keyword=ex[8]
         )
         for ex in results
     ]
