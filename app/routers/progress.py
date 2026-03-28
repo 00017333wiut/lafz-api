@@ -79,8 +79,7 @@ def get_my_stats(
     )
 
 
-@router.post("/exercises/{exercise_id}/attempt",
-             response_model=ExerciseAttemptResponse)
+@router.post("/exercises/{exercise_id}/attempt", response_model=ExerciseAttemptResponse)
 def attempt_exercise(
     exercise_id: int,
     body: ExerciseAttemptRequest,
@@ -88,80 +87,56 @@ def attempt_exercise(
     db: Session = Depends(get_db)
 ):
     user_id = current_user["user_id"]
-
-    exercise = db.execute(
-        text("SELECT * FROM exercise WHERE id = :eid"),
-        {"eid": exercise_id}
-    ).fetchone()
+    exercise = db.execute(text("SELECT * FROM exercise WHERE id = :eid"), {"eid": exercise_id}).fetchone()
 
     if not exercise:
         raise HTTPException(status_code=404, detail="Exercise not found")
 
-    correct_answer = exercise[7]  # correct_answer column
+    correct_answer = exercise[7]
     points = exercise[9]
-
-    exercise_type = db.execute(
-        text("SELECT exercise_type FROM exercise WHERE id = :eid"),
-        {"eid": exercise_id}
-    ).scalar()
+    exercise_type = exercise[3] # Make sure index 3 is exercise_type!
 
     user_ans_raw = body.user_answer
 
-    # Logic for Speaking Exercises
+    # --- LOGIC START ---
     if exercise_type == "SPEAKING":
         if user_ans_raw == "skipped":
-            is_correct = True  # Mark true so they can progress
-            points_earned = 0  # But no points for skipping!
+            is_correct = True
+            points_earned = 0
             feedback_msg = "Skipped"
         else:
             is_correct = True
             points_earned = points
             feedback_msg = "Great speaking!"
     else:
-        # Standard logic for Multiple Choice / Text
+        # Standard logic for Multiple Choice / Spelling
         user_ans = str(user_ans_raw).strip().lower()
         correct_ans = str(correct_answer).strip().lower()
-
         is_correct = (user_ans == correct_ans)
         points_earned = points if is_correct else 0
         feedback_msg = "Correct!" if is_correct else "Try again!"
-
-    # Normalise both to strings for comparison
-    user_ans = json.dumps(body.user_answer, sort_keys=True) \
-        if isinstance(body.user_answer, dict) \
-        else str(body.user_answer)
-    correct_ans = json.dumps(correct_answer, sort_keys=True) \
-        if isinstance(correct_answer, dict) \
-        else str(correct_answer)
-
-    is_correct = user_ans.strip().lower() == correct_ans.strip().lower()
-
+    # --- LOGIC END ---
 
     # Record the attempt
     db.execute(
         text("""
-            INSERT INTO exercise_attempt
+            INSERT INTO exercise_attempt 
             (user_id, exercise_id, user_answer, is_correct, points_earned, attempted_at)
             VALUES (:uid, :eid, :ans, :correct, :pts, now())
         """),
         {
-                "uid": user_id,
-                "eid": exercise_id,
-                "ans": json.dumps(user_ans_raw),
-                "correct": is_correct,
-                "pts": points_earned
-            }
+            "uid": user_id, "eid": exercise_id,
+            "ans": json.dumps(user_ans_raw), "correct": is_correct, "pts": points_earned
+        }
     )
     db.commit()
-
-    logger.info(f"User {user_id} attempted exercise {exercise_id} — correct: {is_correct}")
 
     return ExerciseAttemptResponse(
         is_correct=is_correct,
         points_earned=points_earned,
         correct_answer=correct_answer,
         feedback=feedback_msg,
-        answer_explanation=exercise[8]  # answer_explanation column index
+        answer_explanation=exercise[8]
     )
 
 @router.get("/achievements")
