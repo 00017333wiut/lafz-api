@@ -105,20 +105,26 @@ def attempt_exercise(
         {"eid": exercise_id}
     ).scalar()
 
-    # Speaking exercises — any input counts as correct
+    user_ans_raw = body.user_answer
+
+    # Logic for Speaking Exercises
     if exercise_type == "SPEAKING":
-        is_correct = True
-        points_earned = points
+        if user_ans_raw == "skipped":
+            is_correct = True  # Mark true so they can progress
+            points_earned = 0  # But no points for skipping!
+            feedback_msg = "Skipped"
+        else:
+            is_correct = True
+            points_earned = points
+            feedback_msg = "Great speaking!"
     else:
-        # existing comparison logic
-        user_ans = json.dumps(body.user_answer, sort_keys=True) \
-            if isinstance(body.user_answer, dict) \
-            else str(body.user_answer)
-        correct_ans = json.dumps(correct_answer, sort_keys=True) \
-            if isinstance(correct_answer, dict) \
-            else str(correct_answer)
-        is_correct = user_ans.strip().lower() == correct_ans.strip().lower()
+        # Standard logic for Multiple Choice / Text
+        user_ans = str(user_ans_raw).strip().lower()
+        correct_ans = str(correct_answer).strip().lower()
+
+        is_correct = (user_ans == correct_ans)
         points_earned = points if is_correct else 0
+        feedback_msg = "Correct!" if is_correct else "Try again!"
 
     # Normalise both to strings for comparison
     user_ans = json.dumps(body.user_answer, sort_keys=True) \
@@ -129,7 +135,7 @@ def attempt_exercise(
         else str(correct_answer)
 
     is_correct = user_ans.strip().lower() == correct_ans.strip().lower()
-    points_earned = points if is_correct else 0
+
 
     # Record the attempt
     db.execute(
@@ -139,12 +145,12 @@ def attempt_exercise(
             VALUES (:uid, :eid, :ans, :correct, :pts, now())
         """),
         {
-            "uid": user_id,
-            "eid": exercise_id,
-            "ans": json.dumps(body.user_answer),
-            "correct": is_correct,
-            "pts": points_earned
-        }
+                "uid": user_id,
+                "eid": exercise_id,
+                "ans": json.dumps(user_ans_raw),
+                "correct": is_correct,
+                "pts": points_earned
+            }
     )
     db.commit()
 
@@ -154,7 +160,7 @@ def attempt_exercise(
         is_correct=is_correct,
         points_earned=points_earned,
         correct_answer=correct_answer,
-        feedback="Correct!" if is_correct else "Try again!",
+        feedback=feedback_msg,
         answer_explanation=exercise[8]  # answer_explanation column index
     )
 
